@@ -54,32 +54,30 @@
 //     res.json(chords);
 // });
 
-
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
+const fs = require("fs");
 const Chord = require("./models/chord");
 
 const app = express();
-app.use(express.json());
 
-// Multer setup for file storage
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, "uploads/"); // Save files to 'uploads' folder
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname)); // Add timestamp to filename
+// Configure multer for file uploads
+const upload = multer({
+    dest: "uploads/",
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === "audio/mpeg") cb(null, true);
+        else cb(new Error("Only MP3 files are allowed"));
     },
 });
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
-const upload = multer({ storage });
+app.use(express.json());
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Serve static files (frontend)
-app.use(express.static("public"));
-app.use("/uploads", express.static("uploads")); // Make uploaded files accessible
-
-// API routes
+// Get all chords
 app.get("/chords", async (req, res) => {
     try {
         const chords = await Chord.find();
@@ -89,33 +87,55 @@ app.get("/chords", async (req, res) => {
     }
 });
 
-app.post("/chords", upload.single("audioFile"), async (req, res) => {
+// Add a new chord
+app.post("/chords", upload.single("audio"), async (req, res) => {
     try {
-        const { name, notes } = req.body;
-        const audio = req.file ? `/uploads/${req.file.filename}` : null;
+        const { majorName, majorNotes, details, minorName, minorNotes } = req.body;
+        const originalPath = req.file.path;
+        const newFileName = `${req.file.filename}.mp3`;
+        const newPath = path.join(req.file.destination, newFileName);
 
-        const newChord = new Chord({ name, notes: notes.split(","), audio });
+        // Rename the file to include the .mp3 extension
+        fs.renameSync(originalPath, newPath);
+        const newChord = new Chord({
+            majorName,
+            majorNotes: majorNotes.split(",").map(note => note.trim()),
+            details,
+            minorName,
+            minorNotes: minorNotes.split(",").map(note => note.trim()),
+            audio: `/uploads/${req.file.filename}.mp3`,
+        });
         await newChord.save();
-
         res.status(201).send("Chord added successfully");
-    } catch (err) {
+    } catch (err) { 
         res.status(400).send("Error adding chord");
     }
 });
 
+// Delete a chord
 app.delete("/chords/:id", async (req, res) => {
     try {
-        await Chord.findByIdAndDelete(req.params.id);
+        const chord = await Chord.findById(req.params.id);
+        if (!chord) return res.status(404).send("Chord not found");
+
+        // Delete audio file
+        const audioPath = path.join(__dirname, chord.audio);
+        if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+
+        await chord.deleteOne();
+
         res.send("Chord deleted successfully");
     } catch (err) {
         res.status(400).send("Error deleting chord");
     }
 });
 
-// Serve admin panel route
 app.get("/admin", (req, res) => {
+    console.log("admin path");
     res.sendFile(__dirname + "/public/admin.html");
 });
 
-// Start server
+app.use(express.static("public"));
+
+
 app.listen(3000, () => console.log("Server running on http://localhost:3000"));
