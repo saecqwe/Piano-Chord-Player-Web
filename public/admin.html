@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chord Admin Panel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+    </style>
+</head>
+<body>
+    <h1>Chord Admin Panel</h1>
+    <form id="addChordForm">
+        <label for="name">Chord Name:</label>
+        <input type="text" id="name" name="name" required>
+        <label for="notes">Notes (comma-separated):</label>
+        <input type="text" id="notes" name="notes" required>
+        <label for="audioFile">Audio File:</label>
+        <input type="file" id="audioFile" name="audioFile">
+        <button type="submit">Add Chord</button>
+    </form>
+
+    <h2>Existing Chords</h2>
+    <table id="chordTable">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Notes</th>
+                <th>Audio</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Chords will be dynamically loaded here -->
+        </tbody>
+    </table>
+
+    <script>
+        const form = document.getElementById("addChordForm");
+        const tableBody = document.querySelector("#chordTable tbody");
+
+        // Fetch and display chords
+        async function fetchChords() {
+            const response = await fetch("/chords");
+            const chords = await response.json();
+
+            tableBody.innerHTML = "";
+            chords.forEach(chord => {
+                const row = document.createElement("tr");
+
+                const nameCell = document.createElement("td");
+                nameCell.textContent = chord.name;
+                row.appendChild(nameCell);
+
+                const notesCell = document.createElement("td");
+                notesCell.textContent = chord.notes.join(", ");
+                row.appendChild(notesCell);
+
+                const audioCell = document.createElement("td");
+                if (chord.audio) {
+                    const audioLink = document.createElement("a");
+                    audioLink.href = chord.audio;
+                    audioLink.textContent = "Play";
+                    audioLink.target = "_blank";
+                    audioCell.appendChild(audioLink);
+                }
+                row.appendChild(audioCell);
+
+                const actionCell = document.createElement("td");
+                const deleteButton = document.createElement("button");
+                deleteButton.textContent = "Delete";
+                deleteButton.addEventListener("click", async () => {
+                    await fetch(`/chords/${chord._id}`, { method: "DELETE" });
+                    fetchChords();
+                });
+                actionCell.appendChild(deleteButton);
+                row.appendChild(actionCell);
+
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Handle form submission
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+
+            await fetch("/chords", {
+                method: "POST",
+                body: formData,
+            });
+
+            form.reset();
+            fetchChords();
+        });
+
+        // Initial fetch
+        fetchChords();
+    </script>
+</body>
+</html>
